@@ -64,10 +64,9 @@ fn generate_game() -> Vec<Stamp> {
 }
 
 enum GetScoreErrors {
-    ScoreNotFound = -1,
-    OffsetIsNegative = -2,
-    GameStampsSetEmpty = -3,
-    GameStampsSetEmptyAndOffsetIsNeg = -4,
+    OffsetIsNegative = -1,
+    GameStampsSetEmpty = -2,
+    GameStampsSetEmptyAndOffsetIsNeg = -3,
 }
 
 fn err_code(error: GetScoreErrors) -> i32 {
@@ -88,26 +87,31 @@ fn dup_err_code(code: i32) -> (i32, i32) {
 ///
 /// # Errors
 /// The smaller tne number is the more severe is the error.
-/// 1) Returns (-1, -1) if score is not found.
-/// 2) Returns (-2, -2) if `offset` is less than 0.
-/// 3) Returns (-3, -3) if `game_stamps` array is empty.
-/// 4) Returns (-4, -4) if `game_stamps` array is empty AND `offset` is less than 0.
+/// 1) Returns (-1, -1) if `offset` is less than 0.
+/// 2) Returns (-2, -2) if `game_stamps` array is empty.
+/// 3) Returns (-3, -3) if `game_stamps` array is empty AND `offset` is less than 0.
+/// If score for specified offset is not found score for previous offset is returned
+/// (as the score hasn't change in fact).
 ///
 // TODO: Change return type to a struct instead of tuple.
+// Real TODO: What if offset is way over the match end?
+// But the match end is not specified.
 fn get_score(game_stamps: &[Stamp], offset: i32) -> (i32, i32) {
     use GetScoreErrors::*;
 
     let err = |error: GetScoreErrors| dup_err_code(err_code(error));
+    let res_from_stamp = |stamp: Stamp| (stamp.score.home, stamp.score.away);
 
     match (game_stamps.is_empty(), offset.is_negative()) {
         (true, true) => err(GameStampsSetEmptyAndOffsetIsNeg),
         (true, false) => err(GameStampsSetEmpty),
         (false, true) => err(OffsetIsNegative),
-        (false, false) => game_stamps
-            .binary_search_by(|stamp| Ord::cmp(&stamp.offset, &offset))
-            .map(|idx| game_stamps[idx].score)
-            .map(|score| (score.home, score.away))
-            .unwrap_or(err(ScoreNotFound)),
+        (false, false) => {
+            match game_stamps.binary_search_by(|stamp| Ord::cmp(&stamp.offset, &offset)) {
+                Ok(found_idx) => res_from_stamp(game_stamps[found_idx]),
+                Err(next_possible_idx) => res_from_stamp(game_stamps[next_possible_idx - 1]),
+            }
+        }
     }
 }
 
@@ -116,20 +120,28 @@ mod tests {
     use super::*;
     use GetScoreErrors::*;
 
-    fn err_code(error: GetScoreErrors) -> i32 {
-        error as i32
-    }
-
-    fn dup_err_code(code: i32) -> (i32, i32) {
-        (code, code)
-    }
-
     #[test]
     fn enum_number_test() {
-        assert_eq!(err_code(ScoreNotFound), -1);
-        assert_eq!(err_code(OffsetIsNegative), -2);
-        assert_eq!(err_code(GameStampsSetEmpty), -3);
-        assert_eq!(err_code(GameStampsSetEmptyAndOffsetIsNeg), -4);
+        assert_eq!(err_code(OffsetIsNegative), -1);
+        assert_eq!(err_code(GameStampsSetEmpty), -2);
+        assert_eq!(err_code(GameStampsSetEmptyAndOffsetIsNeg), -3);
+    }
+    
+    #[test]
+    fn return_prev_offset() {
+        let new_stamp = |val| Stamp { offset: val, score: Score { home: val, away: val } };
+        let mut game = vec![INITIAL_STAMP];
+        for n in 1..=3 {
+            game.push(new_stamp(n))
+        }
+        
+        for n in 0..=3 {
+            assert_eq!(get_score(&game, n), (n, n))
+        }
+        
+        for n in 4..=100 {
+            assert_eq!(get_score(&game, n), (3, 3))
+        }
     }
 
     #[test]
@@ -165,7 +177,7 @@ mod tests {
     #[test]
     fn populated_game_stamps_offset_is_natural_number() {
         let game = generate_game();
-        let expected_output = err_code(ScoreNotFound);
+        let expected_output = err_code(OffsetIsNegative);
 
         let (home_score, away_score) = get_score(&game, 1);
         dbg!((home_score, away_score));
@@ -173,6 +185,16 @@ mod tests {
         assert!(away_score >= expected_output);
 
         let (home_score, away_score) = get_score(&game, 35);
+        dbg!((home_score, away_score));
+        assert!(home_score >= expected_output);
+        assert!(away_score >= expected_output);
+        
+        let (home_score, away_score) = get_score(&game, 16975);
+        dbg!((home_score, away_score));
+        assert!(home_score >= expected_output);
+        assert!(away_score >= expected_output);
+        
+        let (home_score, away_score) = get_score(&game, 40_000);
         dbg!((home_score, away_score));
         assert!(home_score >= expected_output);
         assert!(away_score >= expected_output);
