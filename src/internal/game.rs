@@ -126,19 +126,25 @@ mod tests {
         assert_eq!(err_code(GameStampsSetEmpty), -2);
         assert_eq!(err_code(GameStampsSetEmptyAndOffsetIsNeg), -3);
     }
-    
+
     #[test]
     fn return_prev_offset() {
-        let new_stamp = |val| Stamp { offset: val, score: Score { home: val, away: val } };
+        let new_stamp = |val| Stamp {
+            offset: val,
+            score: Score {
+                home: val,
+                away: val,
+            },
+        };
         let mut game = vec![INITIAL_STAMP];
         for n in 1..=3 {
             game.push(new_stamp(n))
         }
-        
+
         for n in 0..=3 {
             assert_eq!(get_score(&game, n), (n, n))
         }
-        
+
         for n in 4..=100 {
             assert_eq!(get_score(&game, n), (3, 3))
         }
@@ -188,12 +194,12 @@ mod tests {
         dbg!((home_score, away_score));
         assert!(home_score >= expected_output);
         assert!(away_score >= expected_output);
-        
+
         let (home_score, away_score) = get_score(&game, 16975);
         dbg!((home_score, away_score));
         assert!(home_score >= expected_output);
         assert!(away_score >= expected_output);
-        
+
         let (home_score, away_score) = get_score(&game, 40_000);
         dbg!((home_score, away_score));
         assert!(home_score >= expected_output);
